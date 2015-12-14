@@ -74,6 +74,7 @@ public class iTweenEvent : MonoBehaviour{
 	
 	public string tweenName = "";
 	public bool playAutomatically = true;
+	bool isModifyPath = false;
 	public float delay = 0;
 	public iTweenEvent.TweenType type = iTweenEvent.TweenType.MoveTo;
 	public bool showIconInInspector = true;
@@ -202,6 +203,53 @@ public class iTweenEvent : MonoBehaviour{
 		if(showIconInInspector) Gizmos.DrawIcon(transform.position, "iTweenIcon.tif");
 	}
 	
+	Vector3 TargetPos;
+	bool _isReflect = false;
+	public void SetTargetPos(Vector3 curVec,bool isReflect = false)
+	{
+		TargetPos = curVec;
+		isModifyPath = true;
+		_isReflect = isReflect;
+	}
+	void ModifyPath(Vector3[] paths)
+	{
+		Vector3 originFinalPos = paths[paths.Length-1];
+		TargetPos = new Vector3(TargetPos.x,TargetPos.y,originFinalPos.z);
+		float scale = TargetPos.magnitude/originFinalPos.magnitude;
+		
+		
+		for(int i =0 ; i < paths.Length ; i ++)
+		{
+			var curPos = paths[i];
+			
+			float angle  = Vector3.Angle(curPos,originFinalPos);
+			var cross = Vector3.Cross(curPos, originFinalPos);
+			if (cross.z < 0 )
+			{
+				angle = -angle;
+			}
+			
+			if(i != paths.Length-1)
+			{
+				paths[i] = Quaternion.AngleAxis(angle,Vector3.back) * TargetPos.normalized * curPos.magnitude * scale;
+				if(_isReflect)
+				{
+					
+					paths[i] = Vector3.Reflect(paths[i], Vector3.Cross(TargetPos.normalized,Vector3.back));
+					
+				}
+				
+			}else
+			{
+				paths[i] = TargetPos;
+			}
+			
+			
+		}
+		
+		
+	}
+	public float modifyTime = -1f;
 	IEnumerator StartEvent() {
 		if(delay > 0) yield return new WaitForSeconds(delay);
 		
@@ -209,8 +257,34 @@ public class iTweenEvent : MonoBehaviour{
 		
 		var optionsHash = new Hashtable();
 		foreach(var pair in Values) {
-			if("path" == pair.Key && pair.Value.GetType() == typeof(string)) optionsHash.Add(pair.Key, iTweenPath.GetPath((string)pair.Value));
-			else optionsHash.Add(pair.Key, pair.Value);
+			if("path" == pair.Key && pair.Value.GetType() == typeof(string)) 
+			{
+				var curPaths = iTweenPath.GetPath((string)pair.Value);
+				if(isModifyPath){
+					ModifyPath(curPaths);
+				}
+				optionsHash.Add(pair.Key, curPaths);
+			}
+			else 
+			{
+				
+				if("time" == pair.Key)
+				{
+					if(modifyTime >= 0f)
+					{
+						optionsHash.Add(pair.Key, modifyTime);
+					}
+					else
+					{
+						optionsHash.Add(pair.Key, pair.Value);
+					}
+					
+					
+				}else
+				{
+					optionsHash.Add(pair.Key, pair.Value);
+				}
+			}
 		}
 		
 		// We use the internalName to have a unique identifier to stop the tween
